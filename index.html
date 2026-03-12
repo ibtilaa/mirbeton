@@ -560,7 +560,7 @@ footer{background:var(--bg2);border-top:1px solid var(--bd);padding:56px 0 32px}
     <div class="footer-grid">
       <div>
         <div class="f-logo">⬡ MirBeton</div>
-        <p class="f-txt">Samarqand va Urgut hududlarida tayyor beton mahsulotlarini yetkazib beruvchi zamonaviy zavod. 24/7 ish tartibi va kafolatlangan sifat.</p>
+        <p class="f-txt">Urgut hududlarida tayyor beton mahsulotlarini yetkazib beruvchi zamonaviy zavod. 24/7 ish tartibi va kafolatlangan sifat.</p>
         <div class="soc-row">
           <a href="https://t.me/MirBetonBot" class="soc-a">🤖</a>
           <a href="https://t.me/MirBeton" class="soc-a">✈️</a>
@@ -579,7 +579,7 @@ footer{background:var(--bg2);border-top:1px solid var(--bd);padding:56px 0 32px}
         <p class="fl-link">🕒 24 soat · 7 kun</p>
       </div>
     </div>
-    <div class="f-bot">&copy; 2025 MirBeton Logistics &amp; Production. Barcha huquqlar himoyalangan.</div>
+    <div class="f-bot">&copy; 2026 MirBeton Logistics &amp; Production. Barcha huquqlar himoyalangan.</div>
   </div>
 </footer>
 
@@ -602,18 +602,14 @@ footer{background:var(--bg2);border-top:1px solid var(--bd);padding:56px 0 32px}
 // ════════════════════════════════════════════════════════════════
 //  ⚙️  CONFIG
 // ════════════════════════════════════════════════════════════════
-
-// ════════════════════════════════════════════════════════════════
-//  🔗  URL SOZLAMALARI (To'g'ridan-to'g'ri bog'lash)
-// ════════════════════════════════════════════════════════════════
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQLHoy9zrKAi5cvDHmLR7_yKQ03AGcUKBEVlbhatpE0g2kfwuU6z9V_V_IISI1HPpwm3D1GJKGxAngF/pub?gid=61862596&single=true&output=csv';
-
-const POST_URL = 'https://script.google.com/macros/s/AKfycbzHxVlbDrKP4Q6SbHrgUXtFZwYKaJCckTKZN7K-aQiyNUysjw0YNnhJkvWCkSTUX5ceZg/exec';
-
+const CSV_URL  = '/api/prices'; 
+const POST_URL = '/api/order';
+  
 let prices = [
   {g:'M150',p:500000,m:7}, {g:'M200',p:550000,m:7}, {g:'M250',p:600000,m:7},
   {g:'M300',p:650000,m:7}, {g:'M350',p:670000,m:7}, {g:'M400',p:700000,m:7}
 ];
+  
 /* ══ SHEETS ══ */
 async function fetchData() {
   try {
@@ -708,37 +704,63 @@ function getGPS(){
   },()=>{alert("Ruxsat berilmadi.");ico.textContent='📍';txt.textContent="Hozirgi joylashuvni aniqlash";btn.disabled=false;});
 }
 
-/* ══ SEND ORDER ══ */
-async function sendOrder(){
-  const btn=document.getElementById('sub-btn');
-  const name=document.getElementById('f-name').value.trim();
-  const phone=document.getElementById('f-phone').value.trim();
-  const grade=document.getElementById('f-grade').value;
-  const volume=document.getElementById('f-m3').value;
-  const address=document.getElementById('f-addr').value.trim();
-  const date=document.getElementById('f-date').value;
-  const time=document.getElementById('f-time').value;
-  const sel=document.getElementById('f-grade');
-  const price=sel.options[sel.selectedIndex].getAttribute('data-price');
-  const total=Math.round(parseFloat(volume||0)*parseInt(price||0));
+/* ══ SEND ORDER (Vercel API bilan) ══ */
+async function sendOrder() {
+  const btn = document.getElementById('sub-btn');
+  
+  // Ma'lumotlarni yig'ish
+  const name = document.getElementById('f-name').value.trim();
+  const phone = document.getElementById('f-phone').value.trim();
+  const grade = document.getElementById('f-grade').value;
+  const volume = document.getElementById('f-m3').value;
+  const address = document.getElementById('f-addr').value.trim();
+  const date = document.getElementById('f-date').value;
+  const time = document.getElementById('f-time').value;
+  const sel = document.getElementById('f-grade');
+  const price = sel.options[sel.selectedIndex].getAttribute('data-price');
+  const total = Math.round(parseFloat(volume || 0) * parseInt(price || 0));
 
-  if(!name){showErr('f-name',"Ismingizni kiriting!");return;}
-  if(phone.replace(/\D/g,'').length<11){showErr('f-phone',"Telefon raqamini to'liq kiriting!");return;}
-  if(!volume||parseFloat(volume)<=0){showErr('f-m3',"Hajmni kiriting!");return;}
-  if(!address){showErr('f-addr',"Manzilni kiriting!");return;}
-  if(!date){showErr('f-date',"Sanani tanlang!");return;}
+  // 1. Validatsiya (Tekshirish)
+  if (!name) { showErr('f-name', "Ismingizni kiriting!"); return; }
+  if (phone.replace(/\D/g, '').length < 11) { showErr('f-phone', "Telefon raqamini to'liq kiriting!"); return; }
+  if (!volume || parseFloat(volume) <= 0) { showErr('f-m3', "Hajmni kiriting!"); return; }
+  if (!address) { showErr('f-addr', "Manzilni kiriting!"); return; }
+  if (!date) { showErr('f-date', "Sanani tanlang!"); return; }
 
-  btn.textContent="Yuborilmoqda...";btn.disabled=true;
-  const payload={name,phone,grade,volume,address,date,time,price,total,timestamp:new Date().toISOString(),source:'mirbeton_v3'};
-  try{
-    if(POST_URL==='https://script.google.com/macros/s/AKfycbwm5kXf9WHgWjKefxXGxV5NP_K2vqMuICth1ZCT8PFf6U2CwinJxjlrHjpkjNs_H7sDOg/exec')throw new Error('demo');
-    const resp=await fetch(POST_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    let res={};try{res=await resp.json();}catch{}
-    if(res.success||resp.ok)showModal(true);else showModal(false,"Server xatoligi. Qayta urinib ko'ring.");
-  }catch(e){
-    showModal(e.message==='demo'?true:false,e.message==='demo'?null:"Tarmoq xatosi. +998 90 000 44 55 ga qo'ng'iroq qiling.");
+  btn.textContent = "Yuborilmoqda..."; 
+  btn.disabled = true;
+
+  // 2. Ma'lumotlar paketi (Payload)
+  const payload = { 
+    name, phone, grade, volume, address, date, time, price, total, 
+    timestamp: new Date().toISOString(), 
+    source: 'mirbeton_v3' 
+  };
+
+  try {
+    // 3. Vercel Proxy orqali yuborish (POST_URL = '/api/order' bo'lishi kerak)
+    const resp = await fetch(POST_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    let res = {};
+    try { res = await resp.json(); } catch(e) {}
+
+    // 4. Natijani tekshirish
+    if (res.success || resp.ok) {
+      showModal(true);
+    } else {
+      showModal(false, "Server xatoligi. Qayta urinib ko'ring.");
+    }
+  } catch (e) {
+    // Tarmoq xatosi yoki CORS muammosi (API orqali CORS bo'lmasligi kerak)
+    showModal(false, "Tarmoq xatosi. +998 90 000 44 55 ga qo'ng'iroq qiling.");
   }
-  btn.textContent="Arizani Yuborish →";btn.disabled=false;
+
+  btn.textContent = "Arizani Yuborish →"; 
+  btn.disabled = false;
 }
 
 function showErr(id,msg){
