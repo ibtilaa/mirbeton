@@ -1,1 +1,0 @@
-{\n  "name": "mirbeton-landing",\n  "version": "1.0.0",\n  "description": "A landing page project",\n  "main": "index.js",\n  "scripts": {\n    "test": "echo 'No tests specified' && exit 1"\n  },\n  "dependencies": {\n    "dotenv": "^8.2.0"\n  }\n}
