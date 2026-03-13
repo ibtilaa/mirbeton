@@ -1,6 +1,6 @@
 export default async function handler(req, res) {
   // Google Apps Script URL manzilingiz
-  const GOOGLE_URL = 'https://script.google.com/macros/s/AKfycbx8NvM7F2Fog5ma-wJL8I77aRR_V6IltewOmfXpe3hjFIp_a2XUNHzWE9MYSJxlFvLwyQ/exec';
+  const GOOGLE_URL = 'https://script.google.com/macros/s/AKfycbzJsFs5smnHLMDSqkud4CCC9aVu2_eEvw_LBUJbbIFRU9-TM1Ci6BB3FYMwdMdj2K05rw/exec';
   const SECRET_TOKEN = "MirBeton_Safe_2026"; // Maxfiy kalit
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Faqat POST' });
