@@ -16,6 +16,9 @@ from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 )
 from supabase import create_client, Client
+from datetime import datetime
+
+# --- API ROUTES ---
 
 # --- LOGGING ---
 logging.basicConfig(level=logging.INFO)
@@ -122,7 +125,68 @@ async def handle_secondary_phone(message: types.Message):
         await cmd_start(message)
 
 # --- API ROUTES ---
+@app.post("/api/orders/create")
+async def create_order(request: Request):
+    """Sotuv bo'limi yangi buyurtma kiritganda reyslarni avtomatik yaratadi"""
+    data = await request.json()
+    
+    # 1. Asosiy buyurtmani yaratish
+    order_res = supabase.table("orders").insert({
+        "client_id": data['client_id'],
+        "grade": data['grade'],
+        "total_m3": data['total_m3'],
+        "address": data['address']
+    }).execute()
+    
+    order_id = order_res.data[0]['id']
+    total_m3 = float(data['total_m3'])
+    
+    # 2. Multi-trip generator: Hajmni reyslarga bo'lish
+    trips_count = math.ceil(total_m3 / MAX_MIXER_M3)
+    remaining_m3 = total_m3
+    
+    for i in range(trips_count):
+        trip_m3 = min(MAX_MIXER_M3, remaining_m3)
+        supabase.table("order_trips").insert({
+            "order_id": order_id,
+            "m3": trip_m3,
+            "status": "pending"
+        }).execute()
+        remaining_m3 -= trip_m3
+        
+    return {"success": True, "order_id": order_id}
 
+@app.post("/api/driver/update-status")
+async def update_trip_status(request: Request):
+    """Haydovchi statusni o'zgartirganda (GPS va Overtime hisobi bilan)"""
+    data = await request.json()
+    trip_id = data['trip_id']
+    new_status = data['status'] # 'jonadi', 'manzilda', 'quyish', 'done'
+    
+    update_data = {
+        "status": new_status,
+        "current_lat": data.get('lat'),
+        "current_lng": data.get('lng')
+    }
+    
+    now = datetime.now()
+    if new_status == 'quyish':
+        update_data["start_time"] = now.isoformat()
+    elif new_status == 'done':
+        update_data["end_time"] = now.isoformat()
+        
+        # Overtime hisoblash (Agar quyish 60 min dan oshsa)
+        trip_res = supabase.table("order_trips").select("*").eq("id", trip_id).single().execute()
+        if trip_res.data.get('start_time'):
+            start = datetime.fromisoformat(trip_res.data['start_time'].replace('Z', '+00:00'))
+            diff = (now.astimezone() - start.astimezone()).total_seconds() / 60
+            if diff > 60:
+                update_data["overtime_minutes"] = int(diff - 60)
+
+    supabase.table("order_trips").update(update_data).eq("id", trip_id).execute()
+    return {"success": True}
+
+# Webhook handler
 @app.post("/api/webhook")
 async def webhook(request: Request):
     try:
@@ -133,12 +197,6 @@ async def webhook(request: Request):
     except Exception as e:
         logger.error(f"Webhook error: {e}")
         return {"ok": True}
-
-@app.get("/api/prices")
-async def get_prices():
-    async with httpx.AsyncClient() as client:
-        r = await client.get(CSV_URL)
-        return list(csv.DictReader(r.text.splitlines()))
 
 # --- SALES & ORDERS ---
 
@@ -233,3 +291,54 @@ async def driver_event(data: dict = Body(...)):
     # Mijozga bildirishnoma
     trip_res = supabase.table("order_trips").select("*, orders(client_id)").eq("id", trip_id).single().execute()
     client = supabase.table("users").select("tg_id").eq("id", trip_res.data['orders']['client_id']).
+
+@app.get("/api/sales/clients")
+async def get_clients():
+    """Mijozlar ro'yxatini olish (Select uchun)"""
+    res = supabase.table("users").select("id, full_name, phone").eq("role", "client").execute()
+    return res.data
+
+@app.post("/api/sales/create-order")
+async def create_sales_order(data: dict = Body(...)):
+    """Sotuv bo'limi tomonidan buyurtma yaratish va reyslarni generatsiya qilish"""
+    
+    # 1. ID generatsiya (MB-DDMM-XXX)
+    now = datetime.now()
+    date_str = now.strftime("%d%m") # 2603
+    
+    # Bugungi buyurtmalar sonini aniqlash
+    count_res = supabase.table("orders").select("id", count="exact").ilike("id", f"MB-{date_str}-%").execute()
+    order_num = (count_res.count or 0) + 1
+    custom_id = f"MB-{date_str}-{str(order_num).zfill(3)}"
+    
+    total_amount = int(data['volume']) * int(data['price_per_m3'])
+    
+    # 2. Buyurtmani saqlash
+    order_payload = {
+        "id": custom_id,
+        "client_id": data['client_id'],
+        "grade": data['grade'],
+        "volume": data['volume'],
+        "address": data['address'],
+        "price_per_m3": data['price_per_m3'],
+        "total_amount": total_amount,
+        "status": "pending"
+    }
+    
+    supabase.table("orders").insert(order_payload).execute()
+    
+    # 3. Multi-trip generator (10m3 dan bo'lib chiqish)
+    total_vol = float(data['volume'])
+    max_capacity = 10.0 # Bitta mikser sig'imi
+    trips_count = math.ceil(total_vol / max_capacity)
+    
+    # Eslatma: 'order_trips' jadvali oldingi darsda kelishilganidek bo'lishi kerak
+    for i in range(trips_count):
+        trip_vol = min(max_capacity, total_vol - (i * max_capacity))
+        supabase.table("order_trips").insert({
+            "order_id": custom_id,
+            "m3": trip_vol,
+            "status": "pending"
+        }).execute()
+        
+    return {"success": True, "order_id": custom_id}

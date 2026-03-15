@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="uz" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>MirBeton ERP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0d0a; --acc: #9dc45a; --border: #242a20;
+        }
+        body { background: var(--bg); color: #e2ead6; font-family: 'JetBrains Mono', monospace; }
+        .industrial-card { 
+            background: #121511; border: 1px solid var(--border); 
+            border-radius: 16px; position: relative; overflow: hidden;
+        }
+        .industrial-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--acc);
+        }
+        .btn-status {
+            background: var(--acc); color: #000; font-family: 'Syne', sans-serif;
+            font-weight: 800; text-transform: uppercase; letter-spacing: -0.02em;
+        }
+        .step-inactive { opacity: 0.3; filter: grayscale(1); }
+        .neon-text { text-shadow: 0 0 10px rgba(157, 196, 90, 0.5); }
+    </style>
+</head>
+<body class="p-4">
+    <header class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-black italic text-lime-500 tracking-tighter">MIRBETON</h1>
+            <div id="role-badge" class="text-[9px] bg-lime-500/10 text-lime-500 px-2 py-0.5 rounded border border-lime-500/20 uppercase">DRIVER PANEL</div>
+        </div>
+        <div id="gps-status" class="text-[10px] text-slate-500">● GPS PENDING</div>
+    </header>
+
+    <main id="main-content">
+        <div id="view-driver" class="hidden space-y-4">
+            <div class="industrial-card p-5">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="text-[10px] text-slate-500 uppercase">Aktiv Reys</div>
+                        <div class="text-xl font-bold">#TRIP-7702</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-slate-500 uppercase">Hajm</div>
+                        <div class="text-lg font-bold text-lime-500">10 m³</div>
+                    </div>
+                </div>
+                <div class="mt-4 p-3 bg-black/40 rounded border border-white/5 text-[11px] text-slate-400">
+                    📍 Urgut, Soyguzar mahalla, 44-uy
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 pt-4">
+                <button onclick="updateStatus('jonadi')" class="btn-status py-5 rounded-2xl text-lg">🚚 Reysga chiqdim</button>
+                <button onclick="updateStatus('manzilda')" class="btn-status py-5 rounded-2xl text-lg bg-orange-500">📍 Manzilga keldim</button>
+                <button onclick="updateStatus('quyish')" class="btn-status py-5 rounded-2xl text-lg bg-blue-500">🏗 Quyish boshlandi</button>
+                <button onclick="updateStatus('done')" class="btn-status py-5 rounded-2xl text-lg bg-white">🏁 Reys yakunlandi</button>
+            </div>
+        </div>
+
+        <div id="view-client" class="hidden space-y-4">
+            <div class="text-center mb-6">
+                <div class="text-[10px] text-slate-500 uppercase">Jami buyurtma</div>
+                <div class="text-3xl font-black">45.0 m³</div>
+            </div>
+            
+            <div id="trips-progress" class="space-y-3">
+                <div class="industrial-card p-4 flex justify-between items-center">
+                    <span class="text-xs">1-Reys (10m³)</span>
+                    <span class="text-[10px] bg-green-500/20 text-green-500 px-2 py-1 rounded">YETKAZILDI</span>
+                </div>
+                <div class="industrial-card p-4 flex justify-between items-center border-lime-500">
+                    <span class="text-xs">2-Reys (10m³)</span>
+                    <span class="text-[10px] bg-blue-500/20 text-blue-500 px-2 py-1 rounded animate-pulse">YO'LDA</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        const params = new URLSearchParams(window.location.search);
+        const role = params.get('role') || 'client';
+        const userId = params.get('user_id');
+
+        tg.expand();
+        tg.enableClosingConfirmation();
+
+        // Role-based view switching
+        document.getElementById('view-' + role).classList.remove('hidden');
+        document.getElementById('role-badge').innerText = role + " PANEL";
+
+        async function updateStatus(status) {
+            tg.HapticFeedback.notificationOccurred('success');
+            
+            // GPS olish
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const res = await fetch('/api/driver/update-status', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        trip_id: 1, // Dinamik bo'lishi kerak
+                        status: status,
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude
+                    })
+                });
+                
+                if (status === 'done') {
+                    tg.close();
+                } else {
+                    tg.showConfirm("Status yangilandi: " + status);
+                }
+            });
+        }
+
+        // GPS status log
+        if (navigator.geolocation) {
+            document.getElementById('gps-status').innerText = "● GPS ACTIVE";
+            document.getElementById('gps-status').classList.replace('text-slate-500', 'text-lime-500');
+        }
+    </script>
+</body>
+</html>
