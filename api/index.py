@@ -33,7 +33,7 @@ async def cmd_start(message: types.Message):
                              reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True, one_time_keyboard=True), parse_mode="HTML")
     elif not user.get("secondary_phone"):
         kb = [[KeyboardButton(text="📱 Telegram raqam bilan bir xil")], [KeyboardButton(text="❌ Qo'shimcha raqam yo'q")]]
-        await message.answer("Rahmat! Endi doimiy aloqa uchun ikkinchi raqamingizni yozing yoki tanlang:", 
+        await message.answer("Rahmat! Endi doimiy aloqa uchun ikkinchi raqamingizni yozing yoki tanlang (kiritish misoli: 991234567):", 
                              reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True), parse_mode="HTML")
     else:
         role = user['role']
@@ -54,21 +54,34 @@ async def handle_contact(message: types.Message):
 async def handle_text_inputs(message: types.Message):
     tg_id = message.from_user.id
     text = message.text.strip()
-    user = supabase.table("users").select("*").eq("tg_id", tg_id).single().execute().data
     
-    if user and not user.get("secondary_phone"):
+    # XAVFSIZ QIDIRUV: .single() ni olib tashladik
+    res = supabase.table("users").select("*").eq("tg_id", tg_id).execute()
+    user = res.data[0] if res.data else None
+    
+    # Agar foydalanuvchi bazada topilmasa, uni /start ga qaytaramiz
+    if not user:
+        return await cmd_start(message)
+    
+    # Agar foydalanuvchi bor bo'lsa, lekin qo'shimcha raqami kiritilmagan bo'lsa
+    if not user.get("secondary_phone"):
         final_phone = ""
-        if "bir xil" in text: final_phone = user['phone']
-        elif "yo'q" in text: final_phone = "none"
+        if "bir xil" in text.lower(): 
+            final_phone = user['phone']
+        elif "yo'q" in text.lower(): 
+            final_phone = "none"
         else:
             clean = re.sub(r'\D', '', text)
-            if len(clean) == 9: final_phone = "+998" + clean
-            elif len(clean) == 12 and clean.startswith("998"): final_phone = "+" + clean
+            if len(clean) == 9: 
+                final_phone = "+998" + clean
+            elif len(clean) == 12 and clean.startswith("998"): 
+                final_phone = "+" + clean
             else:
                 return await message.answer("⚠️ Raqam noto'g'ri. 9 ta raqam ko'rinishida yozing (Masalan: 901234567):")
         
+        # Bazani yangilash
         supabase.table("users").update({"secondary_phone": final_phone}).eq("tg_id", tg_id).execute()
-        await message.answer("✅ Muvaffaqiyatli saqlandi!")
+        await message.answer("✅ Qo'shimcha raqam muvaffaqiyatli saqlandi!")
         await cmd_start(message)
 
 # --- API ROUTES ---
