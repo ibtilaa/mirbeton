@@ -1,0 +1,57 @@
+/* public/css/style.css */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+    --bg: #0b0d0a;
+    --card: #121511;
+    --border: #242a20;
+    --lime: #9dc45a;
+    --purple: #9b78f0;
+    --orange: #f07840;
+}
+
+body { 
+    background: var(--bg); 
+    color: #e2ead6; 
+    font-family: 'JetBrains Mono', monospace; 
+    margin: 0; padding: 15px; 
+    padding-bottom: 50px;
+}
+
+.syne { font-family: 'Syne', sans-serif; }
+
+.industrial-card { 
+    background: var(--card); 
+    border: 1px solid var(--border); 
+    border-radius: 20px; 
+    position: relative; 
+    overflow: hidden; 
+    border-l-4 border-l-lime-500;
+    margin-bottom: 15px;
+}
+
+.admin-card { border-l-purple-500; }
+.driver-card { border-l-orange-500; }
+
+.btn-prime { 
+    background: var(--lime); color: #000; font-weight: 800; 
+    border-radius: 14px; width: 100%; padding: 16px; 
+    border: none; text-transform: uppercase; cursor: pointer;
+    font-family: 'Syne', sans-serif; transition: 0.2s;
+}
+
+.btn-prime:active { transform: scale(0.96); opacity: 0.8; }
+
+.input-field {
+    background: rgba(0,0,0,0.4); border: 1px solid var(--border);
+    padding: 14px; border-radius: 12px; width: 100%; 
+    color: white; margin-bottom: 12px; box-sizing: border-box;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.input-field:focus { border-color: var(--lime); outline: none; }
+
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+header h1 { font-size: 24px; margin: 0; letter-spacing: -1px; }
+
+.badge { font-size: 9px; padding: 3px 8px; border-radius: 4px; border: 1px solid; text-transform: uppercase; font-weight: bold; }

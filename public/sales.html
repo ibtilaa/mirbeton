@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <header>
+        <h1 class="syne italic text-lime-500">SOTUV</h1>
+        <span class="badge" style="color:#9dc45a">Operator</span>
+    </header>
+
+    <div class="industrial-card p-4" style="padding:20px">
+        <h3 class="syne text-xs uppercase mb-3">Yangi buyurtma</h3>
+        <select id="client_id" class="input-field"></select>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
+            <input id="grade" placeholder="M300" class="input-field">
+            <input id="volume" type="number" placeholder="Hajm" class="input-field">
+        </div>
+        <input id="price" type="number" placeholder="1m3 narxi" class="input-field">
+        <textarea id="address" placeholder="Manzil" class="input-field" rows="2"></textarea>
+        <button onclick="saveOrder()" class="btn-prime">🚀 Buyurtmani saqlash</button>
+    </div>
+
+    <h3 class="syne text-xs uppercase mb-3">Tasdiqlash kutilmoqda</h3>
+    <div id="pending-list"></div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        const userId = new URLSearchParams(window.location.search).get('user_id');
+
+        async function init() {
+            // Mijozlar ro'yxatini yuklash
+            const clients = await (await fetch('/api/sales/clients')).json();
+            document.getElementById('client_id').innerHTML = clients.map(c => 
+                `<option value="${c.id}">${c.full_name}</option>`
+            ).join('');
+            loadPending();
+        }
+
+        async function saveOrder() {
+            const data = {
+                client_id: document.getElementById('client_id').value,
+                grade: document.getElementById('grade').value,
+                volume: document.getElementById('volume').value,
+                price_per_m3: document.getElementById('price').value,
+                address: document.getElementById('address').value,
+                user_id: userId,
+                role: 'sales'
+            };
+            await fetch('/api/orders/upsert', { 
+                method:'POST', headers:{'Content-Type':'application/json'}, 
+                body:JSON.stringify(data) 
+            });
+            tg.showConfirm("Saqlandi!");
+            location.reload();
+        }
+
+        async function loadPending() {
+            // Tasdiqlanmagan buyurtmalarni yuklash mantiqi...
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

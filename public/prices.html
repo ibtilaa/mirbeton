@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css">
+    <title>MirBeton | Narxlar</title>
+</head>
+<body>
+    <header>
+        <h1 class="syne italic text-lime-500">MIRBETON</h1>
+        <span class="badge" style="color:#9dc45a">Katalog</span>
+    </header>
+
+    <div class="industrial-card p-0" style="padding:0">
+        <table style="width:100%; border-collapse: collapse;">
+            <tbody id="price-list">
+                <tr><td style="padding:20px; text-align:center">Yuklanmoqda...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function loadPrices() {
+            const res = await fetch('/api/prices');
+            const data = await res.json();
+            document.getElementById('price-list').innerHTML = data.map(p => `
+                <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:20px; font-weight:bold">${p.Marka}</td>
+                    <td style="padding:20px; text-align:right; color:var(--lime); font-weight:800">${parseInt(p.Narx).toLocaleString()} UZS</td>
+                </tr>
+            `).join('');
+        }
+        window.onload = loadPrices;
+    </script>
+</body>
+</html>

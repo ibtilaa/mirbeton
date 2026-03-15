@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <header>
+        <h1 class="syne italic text-orange-500">HAYDOVCHI</h1>
+    </header>
+
+    <div class="industrial-card driver-card p-4" style="padding:20px">
+        <div class="badge" style="color:var(--orange); border-color:var(--orange)">Aktiv Reys</div>
+        <h2 class="syne mt-2 text-2xl italic">#MB-2603-01</h2>
+        <div style="font-size:11px; color:#888; margin-top:10px">
+            📍 Urgut, Navoiy ko'chasi 45-uy<br>
+            👤 Azizbek (+998 90 123 45 67)
+        </div>
+    </div>
+
+    <div style="display:grid; gap:10px">
+        <button onclick="update('en_route')" class="btn-prime" style="background:var(--orange)">🚚 JO'NADIM</button>
+        <button onclick="update('arrived')" class="btn-prime" style="background:#5298f0">📍 MANZILDA</button>
+        <button onclick="update('completed')" class="btn-prime" style="background:white; color:black">🏁 TUGATDIM</button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        async function update(status) {
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                await fetch('/api/driver/event', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({ 
+                        trip_id: 1, 
+                        event: status, 
+                        lat: pos.coords.latitude, 
+                        lng: pos.coords.longitude 
+                    })
+                });
+                tg.HapticFeedback.notificationOccurred('success');
+                if(status === 'completed') tg.close();
+            });
+        }
+    </script>
+</body>
+</html>

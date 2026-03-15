@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <header>
+        <h1 class="syne italic text-blue-400">ISHLAB CHIQARISH</h1>
+    </header>
+
+    <div id="trip-queue">
+        <div class="industrial-card p-4" style="padding:20px; border-l-color:#5298f0">
+            <div style="display:flex; justify-content:space-between">
+                <span class="syne font-bold">#MB-2603-01</span>
+                <span class="badge">10 m³</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-2">Mijoz: Aziz R. | Marka: M400</p>
+            <select class="input-field mt-3" id="driver-select">
+                <option>Haydovchini tanlang...</option>
+                <option value="d1">Alijon (Mixer 01)</option>
+            </select>
+            <button onclick="pour(1)" class="btn-prime" style="background:#5298f0">🏗 Betonni Quyish</button>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        async function pour(tripId) {
+            const driverId = document.getElementById('driver-select').value;
+            await fetch('/api/prod/pour', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ trip_id: tripId, driver_id: driverId })
+            });
+            tg.showAlert("Haydovchiga xabar yuborildi!");
+        }
+    </script>
+</body>
+</html>
