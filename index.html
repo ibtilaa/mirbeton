@@ -1,824 +1,115 @@
-<!DOCTYPE html>
-<html lang="uz">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MirBeton — Urgutda Tayyor Beton Yetkazish</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-/* ━━━━ TOKENS ━━━━ */
-:root {
-  --bg:#0a0c09;--bg2:#10130e;--bg3:#161a13;--bg4:#1d221a;
-  --bd:#252b1e;--bd2:#2e3527;
-  --dim:#3c4434;--muted:#5e6a50;--bright:#a8ba92;--text:#dce8cc;
-  --acc:#9dc45a;--acc2:#7aab38;--glow:rgba(157,196,90,.18);
-  --ok:#4dba86;--info:#4d8ff0;--warn:#e8992a;--danger:#e85252;
-  --sh:0 16px 56px rgba(0,0,0,.7);--sh-sm:0 4px 20px rgba(0,0,0,.45);
-  --r:18px;--r-sm:11px;
-}
-[data-theme="light"]{
-  --bg:#f0f3eb;--bg2:#fff;--bg3:#e6ebe0;--bg4:#d8dfd1;
-  --bd:#c4ccba;--bd2:#b0b9a5;
-  --dim:#8a9480;--muted:#6a7460;--bright:#2e3828;--text:#181d12;
-  --acc:#4a8020;--acc2:#3a6610;--glow:rgba(74,128,32,.13);
-  --ok:#2a8a5a;--info:#2a5cc8;--warn:#b8740a;--danger:#c83030;
-  --sh:0 6px 28px rgba(0,0,0,.11);--sh-sm:0 2px 10px rgba(0,0,0,.07);
-}
+import os, re, math, httpx, csv, logging
+from fastapi import FastAPI, Request, Body
+from fastapi.middleware.cors import CORSMiddleware
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import Command
+from aiogram.types import Update, WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from supabase import create_client, Client
+from datetime import datetime
 
-/* ━━━━ BASE ━━━━ */
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;line-height:1.65;transition:background .3s,color .3s;-webkit-font-smoothing:antialiased}
-::selection{background:var(--acc);color:var(--bg)}
-::-webkit-scrollbar{width:5px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--dim);border-radius:3px}
-.wrap{max-width:1160px;margin:0 auto;padding:0 20px}
+# CONFIG
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+SITE_URL = os.getenv("SITE_URL")
+CSV_URL = os.getenv("GOOGLE_SHEETS_CSV_URL")
 
-/* ━━━━ HEADER ━━━━ */
-header{position:sticky;top:0;z-index:200;background:var(--bg);border-bottom:1px solid var(--bd);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-.nav{display:flex;align-items:center;justify-content:space-between;padding:12px 0;gap:12px}
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+app = FastAPI()
 
-/* — Logo: big brand — */
-.logo{
-  font-family:'Syne',sans-serif;font-weight:800;
-  font-size:1.55rem;color:var(--acc);text-decoration:none;
-  display:flex;align-items:center;gap:10px;letter-spacing:.04em;
-  flex-shrink:0;
-}
-.logo-ico{
-  width:38px;height:38px;background:var(--acc);color:var(--bg);
-  border-radius:10px;display:flex;align-items:center;justify-content:center;
-  font-size:1.1rem;font-weight:800;flex-shrink:0;
-}
-.logo-sub{
-  display:flex;flex-direction:column;line-height:1;
-}
-.logo-name{font-size:1.45rem;letter-spacing:.06em}
-.logo-tag{font-size:.54rem;color:var(--muted);letter-spacing:.12em;font-weight:600;text-transform:uppercase;margin-top:1px}
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-/* — Nav links — */
-.nav-links{display:flex;align-items:center;gap:4px}
-.nav-links a{
-  font-size:.72rem;font-weight:600;letter-spacing:.04em;
-  color:var(--muted);text-decoration:none;padding:7px 12px;
-  border-radius:8px;transition:all .2s;white-space:nowrap;
-}
-.nav-links a:hover{color:var(--acc);background:var(--bg3)}
+# --- BOT HANDLERS ---
 
-/* — Right cluster — */
-.nav-r{display:flex;align-items:center;gap:12px}
-.nav-phone{text-align:right;line-height:1.3}
-.nav-phone a{display:block;font-size:.86rem;font-weight:700;color:var(--text);text-decoration:none;transition:color .2s}
-.nav-phone a:hover{color:var(--acc)}
-.nav-phone span{font-size:.6rem;color:var(--muted)}
-.theme-btn{background:var(--bg3);border:1px solid var(--bd2);color:var(--text);width:38px;height:38px;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.95rem;transition:all .2s;flex-shrink:0}
-.theme-btn:hover{border-color:var(--acc);transform:scale(1.06)}
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    tg_id = message.from_user.id
+    res = supabase.table("users").select("*").eq("tg_id", tg_id).execute()
+    user = res.data[0] if res.data else None
 
-/* ━━━━ HERO ━━━━ */
-.hero{padding:80px 0 60px;text-align:center;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 75% 55% at 50% -5%,var(--glow) 0%,transparent 68%);pointer-events:none}
-.badge{display:inline-flex;align-items:center;gap:8px;background:var(--bg3);color:var(--acc);border:1px solid var(--acc2);border-radius:50px;padding:6px 16px;font-size:.67rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:26px}
-.badge::before{content:'';width:7px;height:7px;background:var(--acc);border-radius:50%;animation:pdot 2s infinite}
-@keyframes pdot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
-.hero h1{font-family:'Syne',sans-serif;font-size:clamp(2.1rem,6.5vw,4.5rem);font-weight:800;line-height:1.08;letter-spacing:-.03em;margin-bottom:22px}
-.hero h1 .ac{color:var(--acc)}
-.hero-sub{color:var(--muted);font-size:clamp(.88rem,2vw,1rem);max-width:640px;margin:0 auto 36px;line-height:1.85}
-.hero-ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.btn-p{background:var(--acc);color:var(--bg);border:none;padding:15px 32px;border-radius:var(--r-sm);font-family:'Syne',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:all .25s}
-.btn-p:hover{transform:translateY(-3px);filter:brightness(1.08);box-shadow:0 8px 28px var(--glow)}
-.btn-g{background:transparent;color:var(--text);border:1px solid var(--bd2);padding:15px 26px;border-radius:var(--r-sm);font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:all .25s}
-.btn-g:hover{border-color:var(--acc);color:var(--acc)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bd);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;margin-top:56px}
-.stat{background:var(--bg2);padding:26px 20px;text-align:center;transition:background .2s}
-.stat:hover{background:var(--bg3)}
-.stat-n{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:var(--acc);line-height:1;margin-bottom:5px}
-.stat-l{font-size:.65rem;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+    if not user:
+        kb = [[KeyboardButton(text="📱 Kontaktni ulash", request_contact=True)]]
+        markup = ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True, one_time_keyboard=True)
+        return await message.answer("<b>MirBeton tizimiga xush kelibsiz!</b>\nRo'yxatdan o'tish uchun telefon raqamingizni yuboring:", reply_markup=markup, parse_mode="HTML")
 
-/* ━━━━ SECTION HEAD ━━━━ */
-.sh{display:flex;align-items:center;gap:18px;margin:64px 0 28px}
-.sh h2{font-family:'Syne',sans-serif;font-size:clamp(1.3rem,3.5vw,1.7rem);font-weight:800;white-space:nowrap}
-.sh-line{flex:1;height:1px;background:linear-gradient(to right,var(--bd2),transparent)}
+    if not user.get("secondary_phone"):
+        kb = [[KeyboardButton(text="📱 Telegram raqam bilan bir xil")], [KeyboardButton(text="❌ Qo'shimcha raqam yo'q")]]
+        markup = ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+        return await message.answer("Endi qo'shimcha bog'lanish raqamingizni yuboring yoki tanlang:", reply_markup=markup)
 
-/* ━━━━ PRICE TABLE ━━━━ */
-.price-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh);margin-bottom:16px}
-.pt{width:100%;border-collapse:collapse;min-width:420px}
-.pt thead th{background:var(--bg3);padding:14px 18px;text-align:left;color:var(--muted);font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;border-bottom:1px solid var(--bd2)}
-.pt tbody td{padding:14px 18px;border-bottom:1px solid var(--bd);font-size:.88rem;transition:background .15s}
-.pt tbody tr:hover td{background:var(--bg3)}
-.pt tbody tr:last-child td{border-bottom:none}
-.gtag{background:var(--bg4);color:var(--acc);padding:4px 11px;border-radius:7px;font-weight:700;font-family:'Syne',sans-serif;border:1px solid var(--acc2);font-size:.82rem}
-.ok-dot{color:var(--ok)}
+    # Main Menu
+    role = user['role']
+    app_url = f"{SITE_URL}/app.html?role={role}&user_id={user['id']}"
+    
+    kb = [[KeyboardButton(text="🏗 Tizimga kirish", web_app=WebAppInfo(url=app_url))]]
+    if role in ['admin', 'sales']:
+        kb.append([KeyboardButton(text="📊 Narxlar", web_app=WebAppInfo(url=f"{SITE_URL}/app.html?role=prices"))])
+    
+    await message.answer(f"Xush kelibsiz! Rolingiz: {role.upper()}", reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True))
 
-/* ━━━━ CALCULATOR ━━━━ */
-.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:36px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:36px;margin-bottom:20px;box-shadow:var(--sh);align-items:start}
-.calc-inputs{display:flex;flex-direction:column}
-.fg{margin-bottom:20px}
-.fl{display:flex;align-items:center;gap:7px;font-size:.76rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;line-height:1}
-.fl-dot{width:7px;height:7px;border-radius:2px;flex-shrink:0}
+@dp.message(F.contact)
+async def handle_contact(message: types.Message):
+    phone = "+" + message.contact.phone_number.replace("+", "")
+    supabase.table("users").upsert({"tg_id": message.from_user.id, "full_name": message.from_user.full_name, "phone": phone, "role": "client"}).execute()
+    await cmd_start(message)
 
-/* — inputs: bigger font for forms — */
-.fi{width:100%;background:var(--bg3);border:1px solid var(--bd2);border-left-width:3px;border-radius:var(--r-sm);padding:14px 16px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:1.05rem;transition:border-color .2s,background .2s;appearance:none;-webkit-appearance:none}
-.fi:focus{outline:none;background:var(--bg2)}
-.fi::placeholder{color:var(--dim);font-size:.9rem}
-.fi-b{border-left-color:var(--info)}.fi-b:focus{border-color:var(--info)}
-.fi-g{border-left-color:var(--acc)}.fi-g:focus{border-color:var(--acc)}
-.fi-o{border-left-color:var(--warn)}.fi-o:focus{border-color:var(--warn)}
-.fi-hint{display:block;font-size:.68rem;color:var(--muted);margin-top:6px;padding-left:3px;line-height:1.5}
+@dp.message(Command("narxlar"))
+async def show_prices(message: types.Message):
+    async with httpx.AsyncClient() as client:
+        r = await client.get(CSV_URL)
+        data = list(csv.DictReader(r.text.splitlines()))
+        text = "<b>Beton narxlari:</b>\n\n"
+        for row in data:
+            text += f"• {row['Marka']}: {row['Narx']} so'm\n"
+        await message.answer(text, parse_mode="HTML")
 
-.calc-res{background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);padding:22px;text-align:center;margin-top:4px}
-.cr-lbl{font-size:.63rem;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;margin-bottom:7px}
-.cr-val{font-family:'Syne',sans-serif;font-size:2.6rem;color:var(--acc);font-weight:800;line-height:1}
-.cr-btn{margin-top:14px;width:100%;background:var(--acc);color:var(--bg);border:none;padding:13px;border-radius:var(--r-sm);font-family:'Syne',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;transition:all .2s}
-.cr-btn:hover{filter:brightness(1.08);transform:translateY(-2px)}
+# --- API ROUTES ---
 
-/* ━━━━ 3D BOX: fixed aspect, no overflow ━━━━ */
-.vis{
-  background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);
-  padding:20px 16px 16px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  /* fixed aspect ratio so diagram never overflows or clips */
-  aspect-ratio:1/0.85;
-  overflow:hidden;
-}
-.vis svg{width:100%;height:100%;display:block}
-.vis-cap{font-size:.63rem;color:var(--muted);text-align:center;margin-top:12px;line-height:1.7;flex-shrink:0}
+@app.post("/api/webhook")
+async def webhook(request: Request):
+    body = await request.json()
+    await dp.feed_update(bot=bot, update=Update(**body))
+    return {"ok": True}
 
-/* ━━━━ ORDER ━━━━ */
-.order-layout{display:grid;grid-template-columns:1fr 380px;gap:32px;margin-bottom:90px;align-items:start}
-.form-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:36px;box-shadow:var(--sh-sm)}
-.form-card h2{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(1.3rem,3vw,1.75rem);margin-bottom:30px;line-height:1.2}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.sel-wrap{position:relative}
-.sel-wrap::after{content:'▾';position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:.9rem}
-select.fi{cursor:pointer;padding-right:38px}
-.btn-gps{display:inline-flex;align-items:center;gap:7px;background:var(--bg3);border:1px solid var(--bd2);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.75rem;padding:10px 14px;border-radius:var(--r-sm);cursor:pointer;transition:all .2s;margin-bottom:22px;width:fit-content}
-.btn-gps:hover{border-color:var(--acc);color:var(--acc)}
+@app.post("/api/prod/pour")
+async def prod_pour(data: dict = Body(...)):
+    """Operator mikserga quyib bo'lgach"""
+    trip_id = data['trip_id']
+    driver_id = data['driver_id']
+    
+    # 1. Status yangilash
+    supabase.table("order_trips").update({"status": "poured", "poured_at": datetime.now().isoformat(), "driver_id": driver_id}).eq("id", trip_id).execute()
+    
+    # 2. Haydovchiga xabar
+    driver = supabase.table("users").select("tg_id").eq("id", driver_id).single().execute()
+    await bot.send_message(driver.data['tg_id'], "✅ <b>Beton tayyor!</b>\nMikseringiz to'ldirildi. Yo'lga chiqishingiz mumkin.", parse_mode="HTML")
+    return {"success": True}
 
-/* summary */
-.sum-card{position:sticky;top:72px;background:var(--bg2);border:2px solid var(--acc);border-radius:var(--r);padding:28px;box-shadow:0 0 0 1px var(--glow),var(--sh)}
-.sum-title{font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;padding-bottom:14px;border-bottom:1px solid var(--bd);margin-bottom:18px;display:flex;align-items:center;gap:8px}
-.s-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:.88rem}
-.s-row span{color:var(--muted)}.s-row b{color:var(--text);font-weight:600}
-.del-box{display:flex;gap:12px;align-items:flex-start;background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r-sm);padding:13px;margin-top:12px;transition:border-color .3s}
-.del-ico{font-size:1.4rem;line-height:1;flex-shrink:0;padding-top:2px}
-.del-txt h5{font-size:.82rem;margin-bottom:3px;line-height:1.3}
-.del-txt p{font-size:.68rem;color:var(--muted);line-height:1.5}
-.total-area{margin-top:22px;padding-top:18px;border-top:1px dashed var(--bd2)}
-.total-lbl{font-size:.63rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
-.total-price{font-family:'Syne',sans-serif;font-size:clamp(1.6rem,4vw,2.2rem);color:var(--acc);font-weight:800;line-height:1;word-break:break-all}
-.btn-sub{width:100%;background:var(--acc);color:var(--bg);border:none;padding:17px;border-radius:var(--r-sm);font-family:'Syne',sans-serif;font-weight:800;font-size:1.05rem;cursor:pointer;margin-top:20px;transition:all .25s;display:flex;align-items:center;justify-content:center;gap:8px}
-.btn-sub:hover{transform:translateY(-3px);filter:brightness(1.08);box-shadow:0 10px 28px var(--glow)}
-.btn-sub:disabled{opacity:.6;cursor:not-allowed;transform:none}
-.form-fine{font-size:.65rem;color:var(--muted);text-align:center;margin-top:12px;line-height:1.7}
-.form-fine a{color:var(--acc)}
+@app.post("/api/driver/event")
+async def driver_event(data: dict = Body(...)):
+    trip_id = data['trip_id']
+    event = data['event'] # 'en_route', 'arrived', 'completed'
+    
+    status_map = {"en_route": "en_route", "arrived": "arrived", "completed": "completed"}
+    update_field = {"en_route": "departed_at", "arrived": "arrived_at", "completed": "completed_at"}[event]
+    
+    supabase.table("order_trips").update({
+        "status": status_map[event],
+        update_field: datetime.now().isoformat(),
+        "last_lat": data.get('lat'),
+        "last_lng": data.get('lng')
+    }).eq("id", trip_id).execute()
 
-/* ━━━━ WHY MIRBETON ━━━━ */
-.why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:80px}
-.why-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:28px 24px;transition:all .25s;cursor:default}
-.why-card:hover{border-color:var(--acc2);transform:translateY(-3px);box-shadow:var(--sh-sm)}
-.why-ico{font-size:2rem;margin-bottom:14px;line-height:1}
-.why-title{font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;margin-bottom:8px;color:var(--text)}
-.why-desc{font-size:.78rem;color:var(--muted);line-height:1.8}
-
-/* ━━━━ FOOTER ━━━━ */
-footer{background:var(--bg2);border-top:1px solid var(--bd);padding:56px 0 32px}
-.footer-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:44px;margin-bottom:44px}
-.f-logo{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;color:var(--acc);margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.f-txt{font-size:.78rem;color:var(--muted);line-height:1.85;margin-bottom:18px}
-.soc-row{display:flex;gap:9px;flex-wrap:wrap}
-.soc-a{width:36px;height:36px;background:var(--bg3);border:1px solid var(--bd2);border-radius:9px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:.95rem;transition:all .2s}
-.soc-a:hover{border-color:var(--acc);transform:scale(1.06)}
-.fc h4{font-family:'Syne',sans-serif;font-weight:800;font-size:.82rem;margin-bottom:16px;text-transform:uppercase;letter-spacing:.05em;color:var(--bright)}
-.fl-link{display:flex;align-items:center;gap:9px;font-size:.78rem;color:var(--muted);text-decoration:none;margin-bottom:11px;transition:color .2s;line-height:1.4}
-.fl-link:hover{color:var(--text)}
-.f-bot{border-top:1px solid var(--bd);padding-top:22px;text-align:center;font-size:.65rem;color:var(--dim)}
-
-/* ━━━━ MODAL ━━━━ */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px;backdrop-filter:blur(14px)}
-.modal.open{display:flex}
-.mbox{background:var(--bg2);border:2px solid var(--acc);border-radius:24px;max-width:460px;width:100%;padding:44px 36px;text-align:center;animation:mani .35s ease}
-@keyframes mani{from{opacity:0;transform:scale(.9) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
-.m-ico{width:70px;height:70px;background:var(--ok);color:#fff;border-radius:50%;font-size:2rem;display:flex;align-items:center;justify-content:center;margin:0 auto 22px}
-.mbox h2{font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;margin-bottom:10px}
-.mbox p{color:var(--muted);font-size:.84rem;line-height:1.85;margin-bottom:26px}
-.m-btns{display:grid;gap:11px}
-.c-btn{padding:14px 18px;border-radius:13px;text-decoration:none;font-weight:800;font-family:'Syne',sans-serif;display:flex;align-items:center;justify-content:center;gap:10px;font-size:.95rem;transition:all .2s;cursor:pointer;border:none}
-.c-btn:hover{transform:translateY(-2px);filter:brightness(1.06)}
-.c-call{background:var(--acc);color:var(--bg)}.c-tg{background:#229ED9;color:#fff}
-.c-bot{background:var(--bg3);color:var(--text);border:1px solid var(--bd2)}
-.btn-close{background:none;border:1px solid var(--bd2);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.78rem;padding:10px;border-radius:9px;cursor:pointer;margin-top:12px;transition:all .2s;width:100%}
-.btn-close:hover{border-color:var(--danger);color:var(--danger)}
-.loader{display:inline-block;width:18px;height:18px;border:2px solid var(--bd2);border-top-color:var(--acc);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.ld-row td{padding:44px!important;text-align:center}
-
-/* ━━━━ RESPONSIVE ━━━━ */
-@media(max-width:1020px){
-  .order-layout{grid-template-columns:1fr}
-  .sum-card{position:relative;top:0}
-  .calc-grid{grid-template-columns:1fr}
-  .why-grid{grid-template-columns:1fr 1fr}
-  .footer-grid{grid-template-columns:1fr 1fr}
-  .nav-links{display:none}
-  .vis{aspect-ratio:16/9;max-height:260px}
-}
-@media(max-width:680px){
-  .wrap{padding:0 14px}
-  .hero{padding:52px 0 40px}
-  .stats{grid-template-columns:1fr}
-  .footer-grid{grid-template-columns:1fr;gap:28px}
-  .form-card{padding:22px 16px}
-  .calc-grid{padding:22px 16px;gap:20px}
-  .sum-card{padding:20px 16px}
-  .mbox{padding:34px 20px}
-  .row2{grid-template-columns:1fr;gap:0}
-  .why-grid{grid-template-columns:1fr}
-  .vis{aspect-ratio:4/3;max-height:220px}
-}
-@media(max-width:420px){
-  .logo-name{font-size:1.2rem}
-  .logo-tag{display:none}
-  .nav-phone{display:none}
-  .hero h1{font-size:1.9rem}
-  .hero-ctas{flex-direction:column;align-items:stretch}
-  .btn-p,.btn-g{justify-content:center}
-  .fi{font-size:.95rem;padding:13px 13px}
-}
-</style>
-</head>
-<body data-theme="dark">
-
-<!-- ══════════ HEADER ══════════ -->
-<header>
-  <div class="wrap nav">
-    <!-- Big brand logo -->
-    <a href="#" class="logo">
-      <div class="logo-ico">⬡</div>
-      <div class="logo-sub">
-        <span class="logo-name">MirBeton</span>
-        <span class="logo-tag">Tayyor beton yetkazish · URGUT</span>
-      </div>
-    </a>
-
-    <!-- Quick nav links -->
-    <nav class="nav-links">
-      <a href="#prices">Narxlar</a>
-      <a href="#calc">Kalkulyator</a>
-      <a href="#order">Buyurtma</a>
-      <a href="#why">Nima uchun biz</a>
-      <a href="#footer">Aloqa</a>
-    </nav>
-
-    <div class="nav-r">
-      <div class="nav-phone">
-        <a href="tel:+998900004455">+998 90 000 44 55</a>
-        <span>Samarqand · Urgut · 24/7</span>
-      </div>
-      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" aria-label="Mavzu">
-        <span id="theme-ico">🌙</span>
-      </button>
-    </div>
-  </div>
-</header>
-
-<!-- ══════════ HERO ══════════ -->
-<section class="hero">
-  <div class="wrap">
-    <div class="badge">Urgutda №1 Tayyor Beton Yetkazish</div>
-    <h1>Ishonchli Beton.<br><span class="ac">Aniq Hajm Kafolati.</span></h1>
-    <p class="hero-sub">M100 dan M400 gacha tayyor beton mahsulotlarini 24/7 tezkor yetkazib beramiz. O'lchamlarni kiriting — narxni hoziroq bilib oling.</p>
-    <div class="hero-ctas">
-      <a href="#order" class="btn-p">🏗 Buyurtma Berish →</a>
-      <a href="#calc" class="btn-g">🔢 Hajmni Hisoblash</a>
-    </div>
-    <div class="stats">
-      <div class="stat"><div class="stat-n">500+</div><div class="stat-l">Muvaffaqiyatli yetkazish</div></div>
-      <div class="stat"><div class="stat-n">24/7</div><div class="stat-l">Ish tartibi</div></div>
-      <div class="stat"><div class="stat-n">M100–M500</div><div class="stat-l">Beton turlari</div></div>
-    </div>
-  </div>
-</section>
-
-<div class="wrap">
-
-<!-- ══════════ NARXLAR ══════════ -->
-<div class="sh" id="prices"><h2>Narxlar Jadvali</h2><div class="sh-line"></div></div>
-<div class="price-card">
-  <div style="overflow-x:auto">
-    <table class="pt">
-      <thead><tr>
-        <th>Beton Markasi</th><th>Narx (1 m³)</th>
-        <th>Yetkazish (Markaz)</th><th>Min. Hajm</th>
-      </tr></thead>
-      <tbody id="price-body">
-        <tr class="ld-row"><td colspan="4"><span class="loader"></span>Yuklanmoqda...</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- ══════════ KALKULYATOR ══════════ -->
-<div class="sh" id="calc"><h2>Beton Hajmini Hisoblash</h2><div class="sh-line"></div></div>
-<div class="calc-grid">
-
-  <div class="calc-inputs">
-    <div class="fg">
-      <label class="fl" style="color:var(--info)">
-        <span class="fl-dot" style="background:var(--info)"></span>Uzunligi (metrda)
-      </label>
-      <input class="fi fi-b" id="c-l" type="number" placeholder="masalan: 10" min="0" step="0.1" oninput="calcVol()">
-    </div>
-    <div class="fg">
-      <label class="fl" style="color:var(--acc)">
-        <span class="fl-dot" style="background:var(--acc)"></span>Eni (metrda)
-      </label>
-      <input class="fi fi-g" id="c-w" type="number" placeholder="masalan: 5" min="0" step="0.1" oninput="calcVol()">
-    </div>
-    <div class="fg">
-      <label class="fl" style="color:var(--warn)">
-        <span class="fl-dot" style="background:var(--warn)"></span>Qalinligi (santimetrda)
-      </label>
-      <input class="fi fi-o" id="c-t" type="number" placeholder="masalan: 15" min="0" step="1" oninput="calcVol()">
-    </div>
-    <div class="calc-res">
-      <div class="cr-lbl">Hisobangan hajm:</div>
-      <div class="cr-val" id="c-res">0.00 m³</div>
-      <button class="cr-btn" onclick="applyOrder()">Arizaga o'tkazish ↓</button>
-    </div>
-  </div>
-
-  <!-- 3D slab diagram — fits exactly inside .vis box -->
-  <div class="vis">
-    <!--
-      SVG viewBox is set wide enough (0 0 520 340) so all labels
-      including "QALINLIGI" on the right side fit without clipping.
-      The slab geometry uses the same correct isometric math.
-    -->
-    <svg viewBox="0 0 520 340" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
-      <!-- Left face (shadow) -->
-      <polygon points="100,90 195,215 195,272 100,147"
-               fill="var(--bg2)" stroke="var(--acc)" stroke-width="1.8" stroke-linejoin="round"/>
-      <!-- Right face (mid) -->
-      <polygon points="380,158 195,215 195,272 380,215"
-               fill="var(--bg4)" stroke="var(--acc)" stroke-width="1.8" stroke-linejoin="round"/>
-      <!-- Top face -->
-      <polygon points="100,90 295,48 380,158 195,215"
-               fill="var(--bg3)" stroke="var(--acc)" stroke-width="2" stroke-linejoin="round"/>
-      <!-- Top grid texture -->
-      <g opacity="0.1" stroke="var(--acc)" stroke-width="0.9">
-        <line x1="163" y1="58"  x2="248" y2="185"/>
-        <line x1="226" y1="52"  x2="311" y2="172"/>
-        <line x1="115" y1="108" x2="318" y2="62"/>
-        <line x1="132" y1="143" x2="335" y2="98"/>
-      </g>
-
-      <!-- ── UZUNLIK (blue) — left edge offset left ── -->
-      <!-- left edge: (100,90)→(195,215). dir=(95,125), len≈157. perp-left=(-125,95)/157=(-0.796,0.605). offset*26=(-21,16) -->
-      <g>
-        <line x1="79" y1="106" x2="174" y2="231" stroke="var(--info)" stroke-width="2" stroke-dasharray="6 3"/>
-        <line x1="74" y1="101" x2="84"  y2="111"  stroke="var(--info)" stroke-width="2"/>
-        <line x1="169" y1="226" x2="179" y2="236" stroke="var(--info)" stroke-width="2"/>
-        <!-- midpoint=(126,168), angle=atan2(125,95)=52.7° -->
-        <text x="112" y="163" fill="var(--info)"
-              font-family="Syne,sans-serif" font-weight="800" font-size="13"
-              text-anchor="middle" transform="rotate(52.7,112,163)"
-              paint-order="stroke fill" stroke="var(--bg2)" stroke-width="5" stroke-linejoin="round">
-          UZUNLIK
-        </text>
-      </g>
-
-      <!-- ── ENI (green) — front edge offset down ── -->
-      <!-- front edge: (195,215)→(380,158). dir=(185,-57), len≈193. perp-down=(57,185)/193=(0.295,0.959). offset*22=(6,21) -->
-      <g>
-        <line x1="201" y1="236" x2="386" y2="179" stroke="var(--acc)" stroke-width="2" stroke-dasharray="6 3"/>
-        <line x1="195" y1="232" x2="207" y2="240" stroke="var(--acc)" stroke-width="2"/>
-        <line x1="380" y1="175" x2="392" y2="183" stroke="var(--acc)" stroke-width="2"/>
-        <!-- midpoint=(293,207), angle=atan2(-57,185)=-17.1° -->
-        <text x="293" y="201" fill="var(--acc)"
-              font-family="Syne,sans-serif" font-weight="800" font-size="13"
-              text-anchor="middle" transform="rotate(-17.1,293,201)"
-              paint-order="stroke fill" stroke="var(--bg2)" stroke-width="5" stroke-linejoin="round">
-          ENI
-        </text>
-      </g>
-
-      <!-- ── QALINLIGI (orange) — right side vertical bracket ── -->
-      <!-- slab thickness: from (380,158) down 57px to (380,215) -->
-      <g>
-        <line x1="404" y1="161" x2="404" y2="212" stroke="var(--warn)" stroke-width="2.5"/>
-        <line x1="397" y1="161" x2="411" y2="161" stroke="var(--warn)" stroke-width="2"/>
-        <line x1="397" y1="212" x2="411" y2="212" stroke="var(--warn)" stroke-width="2"/>
-        <polygon points="404,155 400,167 408,167" fill="var(--warn)"/>
-        <polygon points="404,218 400,206 408,206" fill="var(--warn)"/>
-        <text x="420" y="191" fill="var(--warn)"
-              font-family="Syne,sans-serif" font-weight="800" font-size="13"
-              text-anchor="start" dominant-baseline="middle"
-              paint-order="stroke fill" stroke="var(--bg2)" stroke-width="5" stroke-linejoin="round">
-          QALINLIGI
-        </text>
-      </g>
-    </svg>
-    <p class="vis-cap">U × E × Qalinlik(sm) ÷ 100 = m³</p>
-  </div>
-
-</div><!-- /calc-grid -->
-
-<!-- ══════════ BUYURTMA ══════════ -->
-<div class="sh" id="order"><h2>Buyurtma Rasmiylashtirish</h2><div class="sh-line"></div></div>
-<div class="order-layout">
-
-  <div class="form-card">
-    <h2>Sizning arizangiz</h2>
-
-    <div class="fg">
-      <label class="fl" style="color:var(--acc)">
-        <span class="fl-dot" style="background:var(--acc)"></span>Sizga qanday murojaat qilaylik?
-      </label>
-      <input class="fi fi-g" id="f-name" type="text" placeholder="To'liq ismingiz (Aziz Rahimov)">
-      <span class="fi-hint">Operatorimiz shu ism bilan murojaat qiladi</span>
-    </div>
-
-    <div class="fg">
-      <label class="fl" style="color:var(--info)">
-        <span class="fl-dot" style="background:var(--info)"></span>Bog'lanish uchun telefon
-      </label>
-      <input class="fi fi-b" id="f-phone" type="tel" value="+998 ">
-      <span class="fi-hint">Operator 15 daqiqa ichida bog'lanadi</span>
-    </div>
-
-    <div class="row2">
-      <div class="fg">
-        <label class="fl" style="color:var(--acc)">
-          <span class="fl-dot" style="background:var(--acc)"></span>Beton turi
-        </label>
-        <div class="sel-wrap">
-          <select class="fi fi-g" id="f-grade" onchange="updateSum()">
-            <option value="M200" data-price="530000">M200</option>
-            <option value="M300" data-price="630000" selected>M300</option>
-            <option value="M400" data-price="720000">M400</option>
-          </select>
-        </div>
-      </div>
-      <div class="fg">
-        <label class="fl" style="color:var(--warn)">
-          <span class="fl-dot" style="background:var(--warn)"></span>Hajm (m³)
-        </label>
-        <input class="fi fi-o" id="f-m3" type="number" value="7" min="0.5" step="0.5" oninput="updateSum()">
-        <span class="fi-hint">Minimal: 7 m³</span>
-      </div>
-    </div>
-
-    <div class="fg">
-      <label class="fl" style="color:var(--muted)">
-        <span class="fl-dot" style="background:var(--muted)"></span>Yetkazish manzili
-      </label>
-      <input class="fi" id="f-addr" type="text" placeholder="Ko'cha, mahalla yoki GPS koordinata">
-    </div>
-    <button class="btn-gps" id="gps-btn" onclick="getGPS()">
-      <span id="gps-ico">📍</span><span id="gps-txt">Hozirgi joylashuvni aniqlash</span>
-    </button>
-
-    <div class="row2">
-      <div class="fg">
-        <label class="fl" style="color:var(--muted)">
-          <span class="fl-dot" style="background:var(--muted)"></span>Qaysi kuni kerak?
-        </label>
-        <input class="fi" id="f-date" type="date">
-      </div>
-      <div class="fg">
-        <label class="fl" style="color:var(--muted)">
-          <span class="fl-dot" style="background:var(--muted)"></span>Soat
-        </label>
-        <input class="fi" id="f-time" type="time" value="08:00">
-      </div>
-    </div>
-  </div>
-
-  <div class="sum-card">
-    <h4 class="sum-title">📋 Buyurtma Hisobi</h4>
-    <div class="s-row"><span>Marka:</span><b id="s-grade">—</b></div>
-    <div class="s-row"><span>Hajm:</span><b id="s-m3">0 m³</b></div>
-    <div class="s-row"><span>1 m³ narxi:</span><b id="s-unit">—</b></div>
-    <div class="del-box" id="d-box">
-      <div class="del-ico">🚛</div>
-      <div class="del-txt">
-        <h5 id="d-title">Manzilni kiriting</h5>
-        <p id="d-desc">Yetkazish shartlari hajmga qarab o'zgaradi.</p>
-      </div>
-    </div>
-    <div class="total-area">
-      <div class="total-lbl">Taxminiy jami:</div>
-      <div class="total-price" id="s-total">0 so'm</div>
-    </div>
-    <button class="btn-sub" id="sub-btn" onclick="sendOrder()">Arizani Yuborish →</button>
-    <p class="form-fine">Yuborib, siz <a href="#">foydalanish shartlariga</a> rozilik bildirasiz. Narxlar taxminiy, operator tasdiqlaydi.</p>
-  </div>
-
-</div><!-- /order-layout -->
-
-<!-- ══════════ NIMA UCHUN MIRBETON ══════════ -->
-<div class="sh" id="why"><h2>Nima Uchun MirBeton?</h2><div class="sh-line"></div></div>
-<div class="why-grid">
-  <div class="why-card">
-    <div class="why-ico">⚡</div>
-    <div class="why-title">Tezkor Yetkazish</div>
-    <div class="why-desc">Buyurtma berilgandan 2 soat ichida yetkazish imkoniyati mavjud. Urgut va Samarqand bo'ylab kengaytirilgan marshrut.</div>
-  </div>
-  <div class="why-card">
-    <div class="why-ico">🏅</div>
-    <div class="why-title">Sertifikatlangan Sifat</div>
-    <div class="why-desc">Har bir partiya zavodimiz laboratoriyasida tekshiriladi. GOST standartlariga to'liq mos — hujjatlar beriladi.</div>
-  </div>
-  <div class="why-card">
-    <div class="why-ico">📏</div>
-    <div class="why-title">Aniq Hajm Kafolati</div>
-    <div class="why-desc">Buyurtma qilgan hajmingiz ±1% aniqlikda yetkaziladi. Ortiqcha haq olinmaydi, hisob-kitob shaffof.</div>
-  </div>
-  <div class="why-card">
-    <div class="why-ico">🚚</div>
-    <div class="why-title">Bepul Yetkazish</div>
-    <div class="why-desc">7 m³ va undan yuqori buyurtmalarda Urgut markaziga yetkazish mutlaqo bepul. Katta hajmda qo'shimcha chegirma.</div>
-  </div>
-  <div class="why-card">
-    <div class="why-ico">🤖</div>
-    <div class="why-title">Bot orqali Kuzatish</div>
-    <div class="why-desc">Telegram botimiz orqali buyurtmangiz statusini real vaqtda kuzating. Operator bilan to'g'ridan-to'g'ri aloqa.</div>
-  </div>
-  <div class="why-card">
-    <div class="why-ico">💬</div>
-    <div class="why-title">Bepul Maslahat</div>
-    <div class="why-desc">Qaysi marka beton kerakligini bilmaysizmi? Mutaxassisimiz telefon yoki Telegram orqali bepul maslahat beradi.</div>
-  </div>
-</div>
-
-</div><!-- /wrap -->
-
-<!-- ══════════ FOOTER ══════════ -->
-<footer id="footer">
-  <div class="wrap">
-    <div class="footer-grid">
-      <div>
-        <div class="f-logo">⬡ MirBeton</div>
-        <p class="f-txt">Urgut hududlarida tayyor beton mahsulotlarini yetkazib beruvchi zamonaviy zavod. 24/7 ish tartibi va kafolatlangan sifat.</p>
-        <div class="soc-row">
-          <a href="https://t.me/MirBetonBot" class="soc-a">🤖</a>
-          <a href="https://t.me/MirBeton" class="soc-a">✈️</a>
-          <a href="#" class="soc-a">📷</a>
-        </div>
-      </div>
-      <div class="fc">
-        <h4>Aloqa</h4>
-        <a href="tel:+998900004455" class="fl-link">📞 +998 90 000 44 55</a>
-        <a href="https://t.me/MirBeton" class="fl-link">✈️ @MirBeton</a>
-        <a href="https://t.me/MirBetonBot" class="fl-link">🤖 @MirBetonBot</a>
-      </div>
-      <div class="fc">
-        <h4>Manzil</h4>
-        <p class="fl-link">📍 Samarqand viloyati, Urgut tumani EIZ </p>
-        <p class="fl-link">🕒 24 soat · 7 kun</p>
-      </div>
-    </div>
-    <div class="f-bot">&copy; 2026 MirBeton Logistics &amp; Production. Barcha huquqlar himoyalangan.</div>
-  </div>
-</footer>
-
-<!-- ══════════ MODAL ══════════ -->
-<div class="modal" id="modal">
-  <div class="mbox">
-    <div class="m-ico" id="m-ico">✓</div>
-    <h2 id="m-title">Arizangiz Qabul Qilindi!</h2>
-    <p id="m-body">Operator yaqin daqiqalar ichida siz bilan bog'lanadi. Shoshilinch bo'lsa, quyidagi tugmalardan foydalaning:</p>
-    <div class="m-btns" id="m-btns">
-      <a href="tel:+998900004455" class="c-btn c-call">📞 Qo'ng'iroq Qilish</a>
-      <a href="https://t.me/MirBeton" target="_blank" class="c-btn c-tg">✈️ Telegram orqali yozish</a>
-      <a href="https://t.me/MirBetonBot" target="_blank" class="c-btn c-bot">🤖 Buyurtmani botda kuzatish</a>
-    </div>
-    <button class="btn-close" onclick="closeModal()">✕ Yopish</button>
-  </div>
-</div>
-
-<script>
-// ════════════════════════════════════════════════════════════════
-//  ⚙️  CONFIG
-// ════════════════════════════════════════════════════════════════
-const CSV_URL  = '/api/prices'; 
-const POST_URL = '/api/order';
-  
-let prices = [
-  {g:'M150',p:500000,m:7}, {g:'M200',p:550000,m:7}, {g:'M250',p:600000,m:7},
-  {g:'M300',p:650000,m:7}, {g:'M350',p:670000,m:7}, {g:'M400',p:700000,m:7}
-];
-  
-/* ══ SHEETS ══ */
-async function fetchData() {
-  try {
-    const r = await fetch(CSV_URL);
-    const csv = await r.text();
-    const rows = csv.trim().split('\n').slice(1);
-    const p = rows.map(row=>{
-      const c=row.split(',');
-      return{g:c[0]?.trim().replace(/"/g,''),p:parseInt((c[1]||'0').replace(/["',\s]/g,'')),m:parseFloat(c[2]?.trim()||7)||7};
-    }).filter(d=>d.g&&d.p>0);
-    if(p.length) prices=p;
-  } catch{}
-  renderTable(); syncDD(); updateSum();
-}
-
-function renderTable(){
-  document.getElementById('price-body').innerHTML=prices.map(d=>`
-    <tr>
-      <td><span class="gtag">${d.g}</span></td>
-      <td><b>${d.p.toLocaleString()}</b> <small style="color:var(--muted)">so'm</small></td>
-      <td><span class="ok-dot">● Markazda Bepul*</span></td>
-      <td style="color:var(--muted)">${d.m} m³</td>
-    </tr>`).join('');
-}
-
-function syncDD(){
-  const sel=document.getElementById('f-grade'),cur=sel.value;
-  sel.innerHTML=prices.map(d=>`<option value="${d.g}" data-price="${d.p}" ${d.g===cur?'selected':''}>${d.g}</option>`).join('');
-}
-
-/* ══ CALCULATOR ══ */
-function calcVol(){
-  const L=parseFloat(document.getElementById('c-l').value)||0;
-  const W=parseFloat(document.getElementById('c-w').value)||0;
-  const T=parseFloat(document.getElementById('c-t').value)||0;
-  const v=L*W*(T/100);
-  document.getElementById('c-res').textContent=v.toFixed(2)+' m³';
-  return v;
-}
-function applyOrder(){
-  const v=calcVol();
-  if(v<=0){alert("O'lchamlarni to'ldiring!");return;}
-  document.getElementById('f-m3').value=v.toFixed(2);
-  updateSum();
-  document.getElementById('order').scrollIntoView({behavior:'smooth'});
-}
-
-/* ══ SUMMARY ══ */
-function updateSum(){
-  const m3=parseFloat(document.getElementById('f-m3').value)||0;
-  const sel=document.getElementById('f-grade');
-  if(!sel||!sel.options[sel.selectedIndex])return;
-  const price=parseInt(sel.options[sel.selectedIndex].getAttribute('data-price'))||0;
-  const total=Math.round(m3*price);
-  document.getElementById('s-grade').textContent=sel.value;
-  document.getElementById('s-m3').textContent=m3+' m³';
-  document.getElementById('s-unit').textContent=price.toLocaleString()+" so'm";
-  document.getElementById('s-total').textContent=total.toLocaleString()+" so'm";
-  const dBox=document.getElementById('d-box'),dT=document.getElementById('d-title'),dD=document.getElementById('d-desc');
-  if(m3>=7){dT.textContent="Urgut Markaz — Yetkazish Bepul 🎉";dD.textContent="Hajmingiz bepul yetkazish shartiga mos.";dBox.style.borderColor="var(--ok)";}
-  else if(m3>0){dT.textContent="Yo'l haqi — Kelishiladi";dD.textContent="7 m³ dan kam: operator bilan alohida kelishiladi.";dBox.style.borderColor="var(--warn)";}
-  else{dT.textContent="Manzilni kiriting";dD.textContent="Yetkazish shartlari hajmga qarab belgilanadi.";dBox.style.borderColor="var(--bd2)";}
-}
-
-/* ══ GPS — village/district format ══ */
-function getGPS(){
-  if(!navigator.geolocation){alert("GPS qo'llab-quvvatlanmaydi.");return;}
-  const btn=document.getElementById('gps-btn'),ico=document.getElementById('gps-ico'),txt=document.getElementById('gps-txt');
-  ico.textContent='⏳';txt.textContent="Aniqlanmoqda...";btn.disabled=true;
-  navigator.geolocation.getCurrentPosition(async pos=>{
-    const{latitude:lat,longitude:lon}=pos.coords;
-    try{
-      const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=uz`);
-      const d=await r.json();
-      const addr=d.address||{};
-      /* Build address: village → district → region — most useful for delivery */
-      const parts=[
-        addr.village||addr.hamlet||addr.suburb||addr.town||addr.city_district||'',
-        addr.county||addr.city||addr.town||'',
-        addr.state||addr.region||''
-      ].filter(Boolean);
-      /* Remove duplicates while preserving order */
-      const unique=[...new Set(parts)];
-      const formatted=unique.join(', ')+` (${lat.toFixed(5)}, ${lon.toFixed(5)})`;
-      document.getElementById('f-addr').value=formatted;
-      ico.textContent='✅';txt.textContent="Joylashuv aniqlandi";
-    }catch{
-      document.getElementById('f-addr').value=`${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-      ico.textContent='📍';txt.textContent="Koordinatalar olindi";
+    # Mijozga bildirishnoma
+    trip = supabase.table("order_trips").select("*, orders(*)").eq("id", trip_id).single().execute()
+    client = supabase.table("users").select("tg_id").eq("id", trip.data['orders']['client_id']).single().execute()
+    
+    msgs = {
+        "en_route": "🚚 Buyurtmangiz yo'lga chiqdi! Mikser manzilga qarab kelmoqda.",
+        "arrived": "📍 Mikser manzilga yetib keldi!",
+        "completed": "✅ Buyurtma muvaffaqiyatli yakunlandi. Rahmat!"
     }
-    btn.disabled=false;
-  },()=>{alert("Ruxsat berilmadi.");ico.textContent='📍';txt.textContent="Hozirgi joylashuvni aniqlash";btn.disabled=false;});
-}
-
-/* ══ SEND ORDER (Vercel API bilan) ══ */
-async function sendOrder() {
-  const btn = document.getElementById('sub-btn');
-  
-  // Ma'lumotlarni yig'ish
-  const name = document.getElementById('f-name').value.trim();
-  const phone = document.getElementById('f-phone').value.trim();
-  const grade = document.getElementById('f-grade').value;
-  const volume = document.getElementById('f-m3').value;
-  const address = document.getElementById('f-addr').value.trim();
-  const date = document.getElementById('f-date').value;
-  const time = document.getElementById('f-time').value;
-  const sel = document.getElementById('f-grade');
-  const price = sel.options[sel.selectedIndex].getAttribute('data-price');
-  const total = Math.round(parseFloat(volume || 0) * parseInt(price || 0));
-
-  // 1. Validatsiya (Tekshirish)
-  if (!name) { showErr('f-name', "Ismingizni kiriting!"); return; }
-  if (phone.replace(/\D/g, '').length < 11) { showErr('f-phone', "Telefon raqamini to'liq kiriting!"); return; }
-  if (!volume || parseFloat(volume) <= 0) { showErr('f-m3', "Hajmni kiriting!"); return; }
-  if (!address) { showErr('f-addr', "Manzilni kiriting!"); return; }
-  if (!date) { showErr('f-date', "Sanani tanlang!"); return; }
-
-  btn.textContent = "Yuborilmoqda..."; 
-  btn.disabled = true;
-
-  // 2. Ma'lumotlar paketi (Payload)
-  const payload = { 
-    name, phone, grade, volume, address, date, time, price, total, 
-    timestamp: new Date().toISOString(), 
-    source: 'mirbeton_v3' 
-  };
-
-  try {
-    // 3. Vercel Proxy orqali yuborish (POST_URL = '/api/order' bo'lishi kerak)
-    const resp = await fetch(POST_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    let res = {};
-    try { res = await resp.json(); } catch(e) {}
-
-    // 4. Natijani tekshirish
-    if (res.success || resp.ok) {
-      showModal(true);
-    } else {
-      showModal(false, "Server xatoligi. Qayta urinib ko'ring.");
-    }
-  } catch (e) {
-    // Tarmoq xatosi yoki CORS muammosi (API orqali CORS bo'lmasligi kerak)
-    showModal(false, "Tarmoq xatosi. +998 90 000 44 55 ga qo'ng'iroq qiling.");
-  }
-
-  btn.textContent = "Arizani Yuborish →"; 
-  btn.disabled = false;
-}
-
-function showErr(id,msg){
-  const el=document.getElementById(id);el.focus();
-  el.style.borderColor='var(--danger)';
-  setTimeout(()=>el.style.borderColor='',2500);alert(msg);
-}
-
-/* ══ MODAL ══ */
-function showModal(ok,errMsg){
-  const ico=document.getElementById('m-ico'),title=document.getElementById('m-title'),
-        body=document.getElementById('m-body'),btns=document.getElementById('m-btns');
-  if(ok){
-    ico.style.background='var(--ok)';ico.textContent='✓';
-    title.textContent="Arizangiz Qabul Qilindi!";
-    body.textContent="Operator 15 daqiqa ichida siz bilan bog'lanadi. Shoshilinch bo'lsa, quyidagi tugmalardan foydalaning:";
-    btns.innerHTML=`
-      <a href="tel:+998900004455" class="c-btn c-call">📞 Qo'ng'iroq Qilish</a>
-      <a href="https://t.me/MirBetonAdmin" target="_blank" class="c-btn c-tg">✈️ Telegram orqali yozish</a>
-      <a href="https://t.me/MirBetonBot" target="_blank" class="c-btn c-bot">🤖 Buyurtmani botda kuzatish</a>`;
-  }else{
-    ico.style.background='var(--danger)';ico.textContent='✕';
-    title.textContent="Yuborishda xatolik!";
-    body.textContent=errMsg||"Buyurtma yuborilmadi.";
-    btns.innerHTML=`<a href="tel:+998900004455" class="c-btn c-call">📞 Qo'ng'iroq Qilish</a>`;
-  }
-  document.getElementById('modal').classList.add('open');
-}
-function closeModal(){document.getElementById('modal').classList.remove('open');}
-document.getElementById('modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
-
-/* ══ THEME ══ */
-function toggleTheme(){
-  const d=document.body.getAttribute('data-theme')==='dark';
-  document.body.setAttribute('data-theme',d?'light':'dark');
-  document.getElementById('theme-ico').textContent=d?'☀️':'🌙';
-  localStorage.setItem('mb-theme',d?'light':'dark');
-}
-(function(){
-  const t=localStorage.getItem('mb-theme')||'dark';
-  document.body.setAttribute('data-theme',t);
-  document.getElementById('theme-ico').textContent=t==='dark'?'🌙':'☀️';
-})();
-
-/* ══ PHONE FORMAT ══ */
-document.getElementById('f-phone').addEventListener('input',function(e){
-  let d=e.target.value.replace(/\D/g,'');
-  if(!d.startsWith('998'))d='998'+d.replace(/^998/,'');
-  let f='+998';
-  if(d.length>3)f+=' '+d.slice(3,5);
-  if(d.length>5)f+=' '+d.slice(5,8);
-  if(d.length>8)f+=' '+d.slice(8,10);
-  if(d.length>10)f+=' '+d.slice(10,12);
-  e.target.value=f;
-});
-
-document.getElementById('f-date').min=new Date().toISOString().split('T')[0];
-window.addEventListener('load',fetchData);
-</script>
-</body>
-</html>
+    await bot.send_message(client.data['tg_id'], msgs[event])
+    return {"success": True}

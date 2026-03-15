@@ -3,56 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>⬡ MirBeton Master Viz</title>
+    <title>MirBeton ERP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
     <style>
         body { background: #0b0d0a; color: #e2ead6; font-family: 'JetBrains Mono', monospace; }
-        .card { background: #121511; border: 1px solid #242a20; border-radius: 20px; }
-        .btn-lime { background: #9dc45a; color: #000; font-weight: 800; border-radius: 14px; }
-        .btn-lime:active { transform: scale(0.96); }
-        h1 { font-family: 'Syne', sans-serif; }
+        .industrial-card { background: #121511; border: 1px solid #242a20; border-radius: 20px; border-l-4 border-l-lime-500; }
+        .btn-prime { background: #9dc45a; color: #000; font-weight: 800; border-radius: 12px; transition: 0.2s; }
+        .btn-prime:active { transform: scale(0.95); }
+        .status-badge { font-size: 9px; padding: 2px 8px; border-radius: 4px; background: #242a20; color: #9dc45a; text-transform: uppercase; }
     </style>
 </head>
-<body class="p-4 pb-24">
-    <header class="flex justify-between items-center mb-8">
-        <h1 class="text-3xl font-black italic text-lime-500 uppercase tracking-tighter">MIRBETON</h1>
-        <div id="gps" class="text-[9px] text-slate-600">● GPS INACTIVE</div>
-    </header>
-
+<body class="p-4">
     <div id="app">
-        <div id="view-admin" class="hidden space-y-4">
-            <h2 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Boshqaruv markazi</h2>
-            <div id="admin-list" class="space-y-2">
-                <p class="text-center py-10 text-slate-600 italic">Yuklanmoqda...</p>
+        <div id="view-prod_ops" class="hidden space-y-4">
+            <h2 class="text-xl font-black text-lime-500">⚙️ ISHLAB CHIQARISH</h2>
+            <div id="prod-orders" class="space-y-3">
+                <div class="industrial-card p-4">
+                    <div class="flex justify-between mb-2">
+                        <span class="font-bold">#MB-2603-01</span>
+                        <span class="status-badge">Kutilmoqda</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">M300 · 10 m³ · Urgut mfy</div>
+                    <select id="driver-select-1" class="w-full bg-slate-900 p-2 rounded mb-2 text-sm border border-slate-700">
+                        <option>Haydovchini tanlang...</option>
+                        <option value="d1">Alijon (Mixer 01)</option>
+                        <option value="d2">Valijon (Mixer 05)</option>
+                    </select>
+                    <button onclick="pourBeton(1)" class="w-full btn-prime py-3">🏗 QUYISHNI BOSHLASH</button>
+                </div>
             </div>
         </div>
 
         <div id="view-driver" class="hidden space-y-4">
-            <div class="card p-6 border-l-4 border-lime-500 mb-6">
-                <div class="text-[10px] text-lime-500 font-bold uppercase mb-1">Active Job</div>
-                <div class="text-2xl font-black italic">#MB-4401</div>
-                <div id="addr" class="text-[10px] text-slate-500 mt-2">📍 Manzil kutilmoqda...</div>
+            <div class="industrial-card p-6">
+                <div class="text-[10px] text-lime-500 font-bold mb-1">FAOL BUYURTMA</div>
+                <div class="text-2xl font-black italic">#MB-2603-01</div>
+                <div id="client-info" class="mt-4 text-xs space-y-1 text-slate-400">
+                    <p>👤 Mijoz: Azizbek R.</p>
+                    <p>📞 Tel: +998 90 123 45 67</p>
+                    <p>📍 Manzil: Urgut, Navoiy ko'chasi</p>
+                </div>
+                <div class="flex gap-2 mt-4">
+                    <button onclick="openMap()" class="flex-1 bg-blue-600 text-[10px] p-3 rounded font-bold">🗺 YANDEX MAP</button>
+                    <button onclick="window.open('tel:+998901234567')" class="flex-1 bg-slate-800 text-[10px] p-3 rounded font-bold">📞 QO'NG'IROQ</button>
+                </div>
             </div>
+            
             <div class="grid grid-cols-1 gap-3">
-                <button onclick="event('en_route')" class="btn-lime py-6 text-xl italic">🚚 JO'NADIM</button>
-                <button onclick="event('arrived')" class="btn-lime py-6 text-xl italic bg-orange-500">📍 MANZILDA</button>
-                <button onclick="event('done')" class="btn-lime py-6 text-xl italic bg-black text-white border border-slate-800">🏁 TUGATDIM</button>
+                <button onclick="driverAction('en_route')" class="btn-prime py-5 text-lg italic bg-lime-500">🚚 JO'NADIM</button>
+                <button onclick="driverAction('arrived')" class="btn-prime py-5 text-lg italic bg-orange-500">📍 MANZILDA</button>
+                <button onclick="driverAction('completed')" class="btn-prime py-5 text-lg italic bg-white text-black">🏁 TUGATDIM</button>
             </div>
         </div>
-
-        <div id="view-prices" class="hidden space-y-2">
-            <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Marka va Narxlar</h2>
-            <div id="price-list" class="space-y-2"></div>
-        </div>
-    </div>
-
-    <div class="fixed bottom-4 left-4 right-4">
-        <button onclick="getGeo()" class="w-full card p-4 flex items-center justify-center gap-2 text-lime-500 font-bold active:bg-slate-900 transition-all">
-            <i class="fas fa-location-arrow"></i>
-            <span class="text-[10px] uppercase tracking-widest" id="geo-btn">Joylashuvni aniqlash</span>
-        </button>
     </div>
 
     <script>
@@ -60,72 +63,40 @@
         const params = new URLSearchParams(window.location.search);
         const role = params.get('role');
         const userId = params.get('user_id');
-        let coords = { lat: null, lng: null };
 
         tg.expand();
-        window.onload = () => {
-            const v = document.getElementById('view-' + (role || 'prices'));
-            if(v) v.classList.remove('hidden');
-            if(role === 'prices' || !role) loadPrices();
-            if(role === 'admin') loadAdmin();
-        };
+        document.getElementById('view-' + role)?.classList.remove('hidden');
 
-        async function getGeo() {
-            document.getElementById('geo-btn').innerText = "ANIQLANMOQDA...";
+        async function pourBeton(tripId) {
+            const driverId = document.getElementById('driver-select-' + tripId).value;
+            await fetch('/api/prod/pour', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ trip_id: tripId, driver_id: driverId })
+            });
+            tg.showConfirm("Xabar haydovchiga yuborildi!");
+        }
+
+        async function driverAction(event) {
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${coords.lat}&lon=${coords.lng}&format=json`);
-                const data = await res.json();
-                document.getElementById('geo-btn').innerText = "✅ ANIQLANDI";
-                document.getElementById('gps').innerText = "● GPS ACTIVE";
-                document.getElementById('gps').style.color = "#9dc45a";
-                if(document.getElementById('addr')) document.getElementById('addr').innerText = "📍 " + data.display_name;
-                tg.HapticFeedback.impactOccurred('medium');
+                await fetch('/api/driver/event', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        trip_id: 1, 
+                        event: event,
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude
+                    })
+                });
+                tg.HapticFeedback.notificationOccurred('success');
+                if(event === 'completed') tg.close();
             });
         }
 
-        async function loadAdmin() {
-            const res = await fetch(`/api/admin/data?user_id=${userId}`);
-            const data = await res.json();
-            document.getElementById('admin-list').innerHTML = data.users.map(u => `
-                <div class="card p-4 flex justify-between items-center border-slate-800/50">
-                    <div class="text-[10px] font-bold uppercase">${u.full_name}<br><span class="text-slate-500 font-normal">${u.role}</span></div>
-                    <select onchange="setRole('${u.id}', this.value)" class="bg-slate-900 text-[10px] p-2 rounded border border-slate-700 outline-none">
-                        <option value="client" ${u.role==='client'?'selected':''}>Mijoz</option>
-                        <option value="driver" ${u.role==='driver'?'selected':''}>Haydovchi</option>
-                        <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
-                    </select>
-                </div>
-            `).join('');
-        }
-
-        async function setRole(tid, r) {
-            await fetch('/api/admin/set-role', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ admin_id: userId, target_id: tid, role: r })
-            });
-            tg.showConfirm("Rol o'zgartirildi!");
-        }
-
-        async function loadPrices() {
-            const res = await fetch('/api/prices');
-            const data = await res.json();
-            document.getElementById('price-list').innerHTML = data.map(p => `
-                <div class="card p-4 flex justify-between font-bold border-lime-900/10">
-                    <span>${p.Marka}</span><span class="text-lime-500">${parseInt(p.Narx).toLocaleString()}</span>
-                </div>
-            `).join('');
-        }
-
-        async function event(s) {
-            tg.MainButton.showProgress();
-            await fetch('/api/driver-event', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ order_id: "MB-4401", step: s, ...coords })
-            });
-            tg.close();
+        function openMap() {
+            const lat = 39.40, lng = 67.24; // Test coords
+            window.open(`yandexmaps://maps.yandex.ru/?pt=${lng},${lat}&z=12&l=map`);
         }
     </script>
 </body>
