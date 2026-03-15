@@ -3,53 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>⬡ MirBeton Master Viz</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
     <style>
-        body { background: #080a08; color: #e2ead6; font-family: 'JetBrains Mono', monospace; }
-        .card { background: #111411; border: 1px solid #222822; border-radius: 20px; }
-        .btn-lime { background: #9dc45a; color: #000; font-weight: 800; border-radius: 15px; transition: 0.2s; }
+        body { background: #0b0d0a; color: #e2ead6; font-family: 'JetBrains Mono', monospace; }
+        .card { background: #121511; border: 1px solid #242a20; border-radius: 20px; }
+        .btn-lime { background: #9dc45a; color: #000; font-weight: 800; border-radius: 14px; }
         .btn-lime:active { transform: scale(0.96); }
+        h1 { font-family: 'Syne', sans-serif; }
     </style>
 </head>
 <body class="p-4 pb-24">
     <header class="flex justify-between items-center mb-8">
-        <h1 style="font-family: 'Syne';" class="text-3xl font-black italic text-lime-500 uppercase">MIRBETON</h1>
-        <div id="loc-indicator" class="text-[10px] text-slate-600 flex items-center gap-1">● GPS OFF</div>
+        <h1 class="text-3xl font-black italic text-lime-500 uppercase tracking-tighter">MIRBETON</h1>
+        <div id="gps" class="text-[9px] text-slate-600">● GPS INACTIVE</div>
     </header>
 
     <div id="app">
-        <div id="view-admin" class="hidden space-y-6">
-            <h2 class="text-xl font-bold italic uppercase border-b border-slate-800 pb-2">Admin Dashboard</h2>
-            <div id="user-list" class="space-y-3">
-                <p class="text-slate-500 text-xs">Foydalanuvchilar yuklanmoqda...</p>
+        <div id="view-admin" class="hidden space-y-4">
+            <h2 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Boshqaruv markazi</h2>
+            <div id="admin-list" class="space-y-2">
+                <p class="text-center py-10 text-slate-600 italic">Yuklanmoqda...</p>
             </div>
         </div>
 
-        <div id="view-driver" class="hidden space-y-4 text-center">
-            <div class="card p-6 border-l-4 border-lime-500 text-left mb-6">
-                <div class="text-[10px] text-lime-500 font-bold uppercase mb-1">Active Trip</div>
+        <div id="view-driver" class="hidden space-y-4">
+            <div class="card p-6 border-l-4 border-lime-500 mb-6">
+                <div class="text-[10px] text-lime-500 font-bold uppercase mb-1">Active Job</div>
                 <div class="text-2xl font-black italic">#MB-4401</div>
-                <div id="addr-text" class="text-[10px] text-slate-500 mt-2">📍 Manzilni aniqlash kutilmoqda</div>
+                <div id="addr" class="text-[10px] text-slate-500 mt-2">📍 Manzil kutilmoqda...</div>
             </div>
             <div class="grid grid-cols-1 gap-3">
-                <button onclick="sendEv('en_route')" class="btn-lime py-6 text-xl italic">🚚 JO'NADIM</button>
-                <button onclick="sendEv('arrived')" class="btn-lime py-6 text-xl italic bg-orange-500">📍 MANZILDA</button>
-                <button onclick="sendEv('done')" class="btn-lime py-6 text-xl italic bg-black text-white border border-slate-800">🏁 TUGATDIM</button>
+                <button onclick="event('en_route')" class="btn-lime py-6 text-xl italic">🚚 JO'NADIM</button>
+                <button onclick="event('arrived')" class="btn-lime py-6 text-xl italic bg-orange-500">📍 MANZILDA</button>
+                <button onclick="event('done')" class="btn-lime py-6 text-xl italic bg-black text-white border border-slate-800">🏁 TUGATDIM</button>
             </div>
         </div>
 
-        <div id="view-prices" class="hidden space-y-3">
-            <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Markalar va Narxlar</h2>
+        <div id="view-prices" class="hidden space-y-2">
+            <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Marka va Narxlar</h2>
             <div id="price-list" class="space-y-2"></div>
         </div>
     </div>
 
     <div class="fixed bottom-4 left-4 right-4">
-        <button onclick="getDetailedLoc()" class="w-full card p-4 flex items-center justify-center gap-2 text-lime-500 active:bg-slate-900 transition-all">
+        <button onclick="getGeo()" class="w-full card p-4 flex items-center justify-center gap-2 text-lime-500 font-bold active:bg-slate-900 transition-all">
             <i class="fas fa-location-arrow"></i>
-            <span class="text-[10px] font-bold uppercase tracking-widest" id="geo-text">Hozirgi joylashuvni aniqlash</span>
+            <span class="text-[10px] uppercase tracking-widest" id="geo-btn">Joylashuvni aniqlash</span>
         </button>
     </div>
 
@@ -58,40 +60,37 @@
         const params = new URLSearchParams(window.location.search);
         const role = params.get('role');
         const userId = params.get('user_id');
-        let currentCoords = { lat: null, lng: null };
+        let coords = { lat: null, lng: null };
 
         tg.expand();
         window.onload = () => {
             const v = document.getElementById('view-' + (role || 'prices'));
             if(v) v.classList.remove('hidden');
-            if(role === 'prices') loadPrices();
+            if(role === 'prices' || !role) loadPrices();
             if(role === 'admin') loadAdmin();
         };
 
-        async function getDetailedLoc() {
-            document.getElementById('geo-text').innerText = "ANIQLANMOQDA...";
+        async function getGeo() {
+            document.getElementById('geo-btn').innerText = "ANIQLANMOQDA...";
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                currentCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentCoords.lat}&lon=${currentCoords.lng}&format=json&addressdetails=1`);
+                coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${coords.lat}&lon=${coords.lng}&format=json`);
                 const data = await res.json();
-                const addr = data.address;
-                const displayAddr = `${addr.suburb || addr.neighborhood || 'Noma\'lum'}, ${addr.city_district || addr.county || ''}`;
-                document.getElementById('geo-text').innerText = "✅ " + displayAddr.substring(0, 25);
-                if(document.getElementById('addr-text')) document.getElementById('addr-text').innerText = "📍 " + data.display_name;
-                document.getElementById('loc-indicator').innerText = "● GPS ACTIVE";
-                document.getElementById('loc-indicator').classList.add('text-lime-500');
-                tg.HapticFeedback.impactOccurred('heavy');
+                document.getElementById('geo-btn').innerText = "✅ ANIQLANDI";
+                document.getElementById('gps').innerText = "● GPS ACTIVE";
+                document.getElementById('gps').style.color = "#9dc45a";
+                if(document.getElementById('addr')) document.getElementById('addr').innerText = "📍 " + data.display_name;
+                tg.HapticFeedback.impactOccurred('medium');
             });
         }
 
         async function loadAdmin() {
-            const res = await fetch(`/api/admin/dashboard?user_id=${userId}`);
+            const res = await fetch(`/api/admin/data?user_id=${userId}`);
             const data = await res.json();
-            const list = document.getElementById('user-list');
-            list.innerHTML = data.users.map(u => `
-                <div class="card p-4 flex justify-between items-center">
-                    <div class="text-xs font-bold">${u.full_name}<br><span class="text-[10px] text-slate-500">${u.role}</span></div>
-                    <select onchange="changeRole('${u.id}', this.value)" class="bg-slate-900 text-[10px] p-1 rounded border border-slate-700 outline-none">
+            document.getElementById('admin-list').innerHTML = data.users.map(u => `
+                <div class="card p-4 flex justify-between items-center border-slate-800/50">
+                    <div class="text-[10px] font-bold uppercase">${u.full_name}<br><span class="text-slate-500 font-normal">${u.role}</span></div>
+                    <select onchange="setRole('${u.id}', this.value)" class="bg-slate-900 text-[10px] p-2 rounded border border-slate-700 outline-none">
                         <option value="client" ${u.role==='client'?'selected':''}>Mijoz</option>
                         <option value="driver" ${u.role==='driver'?'selected':''}>Haydovchi</option>
                         <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
@@ -100,31 +99,31 @@
             `).join('');
         }
 
-        async function changeRole(targetId, newRole) {
-            const res = await fetch('/api/admin/update-role', {
+        async function setRole(tid, r) {
+            await fetch('/api/admin/set-role', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ admin_id: userId, target_uid: targetId, new_role: newRole })
+                body: JSON.stringify({ admin_id: userId, target_id: tid, role: r })
             });
-            if(res.ok) tg.showAlert("Rol o'zgartirildi!");
+            tg.showConfirm("Rol o'zgartirildi!");
         }
 
         async function loadPrices() {
             const res = await fetch('/api/prices');
             const data = await res.json();
             document.getElementById('price-list').innerHTML = data.map(p => `
-                <div class="card p-4 flex justify-between font-bold border-lime-900/20">
+                <div class="card p-4 flex justify-between font-bold border-lime-900/10">
                     <span>${p.Marka}</span><span class="text-lime-500">${parseInt(p.Narx).toLocaleString()}</span>
                 </div>
             `).join('');
         }
 
-        async function sendEv(step) {
+        async function event(s) {
             tg.MainButton.showProgress();
             await fetch('/api/driver-event', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ order_id: "MB-4401", step, ...currentCoords })
+                body: JSON.stringify({ order_id: "MB-4401", step: s, ...coords })
             });
             tg.close();
         }
